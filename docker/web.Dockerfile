@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY apps/web/package.json ./
+RUN npm install --no-audit --no-fund
+
+COPY apps/web ./
+
+EXPOSE 5173
+CMD ["npm", "run", "dev"]

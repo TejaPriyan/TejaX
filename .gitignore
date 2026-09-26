@@ -1,0 +1,38 @@
+# ─── dependencies / build artifacts ────────────────────────────────────────
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.next/
+out/
+
+# ─── runtime data (SQLite db, sandbox scratch) ─────────────────────────────
+apps/api/data/
+data/
+*.db
+*.sqlite
+*.sqlite3
+scratch/
+.tempmediaStorage/
+
+# ─── secrets ───────────────────────────────────────────────────────────────
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+
+# ─── editor / OS ───────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.log
