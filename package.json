@@ -1,0 +1,10 @@
+{
+  "name": "tejax-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TejaX — AI Experimentation & Agent Engineering Platform by Teja Priyan",
+  "scripts": {
+    "build": "npm --prefix apps/web run build",
+    "dev": "npm --prefix apps/web run dev"
+  }
+}

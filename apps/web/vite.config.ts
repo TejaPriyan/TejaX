@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 // The dev server proxies /api and /ws to the FastAPI backend so the browser
 // only ever talks to same-origin URLs (works behind the sandbox preview too).
 export default defineConfig({
+  base: './',
   plugins: [react()],
   server: {
     host: '0.0.0.0',
