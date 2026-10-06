@@ -67,7 +67,17 @@ export default function SiteNav({
             ))}
           </nav>
 
-          <div className="hidden lg:block">
+          <div className="hidden lg:flex items-center gap-3">
+            <a
+              href="https://www.buymeacoffee.com/TejaPriyan"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-line !px-3.5 !py-2 text-[11px] inline-flex items-center gap-1.5 border-[#f59e0b]/40 text-[#f59e0b] hover:bg-[#f59e0b]/10 hover:border-[#f59e0b]/70"
+              title="Support TejaPriyan"
+            >
+              <span>🍕</span>
+              <span>Buy me a pizza</span>
+            </a>
             <Magnetic>
               <button onClick={() => setView('app')} className="btn-line !px-5 !py-2.5">
                 Enter TejaX <span aria-hidden>↗</span>

@@ -26,12 +26,22 @@ export default function Footer() {
               An AI experimentation and agent engineering platform — an empirical laboratory where specialized
               agents collaborate, build, benchmark on real data, and self-audit in secure sandboxes.
             </p>
-            <div className="mt-7">
+            <div className="mt-7 flex flex-wrap items-center gap-3">
               <Magnetic>
                 <button onClick={() => setView('app')} className="btn-line !px-5 !py-2.5">
                   Enter TejaX <span aria-hidden>↗</span>
                 </button>
               </Magnetic>
+              <a
+                href="https://www.buymeacoffee.com/TejaPriyan"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-line !px-4 !py-2.5 inline-flex items-center gap-2 border-[#f59e0b]/40 text-[#f59e0b] hover:bg-[#f59e0b]/10 hover:border-[#f59e0b]/70"
+                title="Support TejaPriyan"
+              >
+                <span>🍕</span>
+                <span>Buy me a pizza</span>
+              </a>
             </div>
           </div>
 
