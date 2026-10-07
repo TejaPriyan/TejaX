@@ -1,5 +1,7 @@
 # ─── dependencies / build artifacts ────────────────────────────────────────
 node_modules/
+.npm-cache/
+playwright-results/
 dist/
 build/
 __pycache__/

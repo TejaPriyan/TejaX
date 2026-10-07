@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from './lib/store'
 import { sound } from './lib/sound'
-import Site from './components/site/Site'
+import { lazy, Suspense } from 'react'
+const Site = lazy(() => import('./components/site/Site'))
+import ConnectionBanner from './components/ConnectionBanner'
 import Sidebar from './components/Sidebar'
 import CommandCenter from './components/CommandCenter'
 import MissionView from './components/MissionView'
@@ -20,7 +22,8 @@ export default function App() {
   const timeline = useStore((s) => s.timeline)
 
   useEffect(() => {
-    boot()
+    void boot()
+    return () => useStore.getState().stop()
   }, [boot])
 
   // Synthesized audio cues on live events (only when the user has enabled sound).
@@ -33,7 +36,7 @@ export default function App() {
   }, [timeline])
 
   if (view === 'site') {
-    return <Site />
+    return <Suspense fallback={<div className="p-8">Loading TejaX…</div>}><Site /></Suspense>
   }
 
   return (
@@ -46,6 +49,7 @@ export default function App() {
       </div>
 
       <Sidebar />
+      <ConnectionBanner />
 
       <main className={`relative flex-1 min-w-0 h-full ${page === 'lab' ? 'overflow-hidden' : 'overflow-y-auto scroll-thin'}`}>
         <div key={page} className={`page-enter relative z-10 ${page === 'lab' ? 'h-full w-full' : 'min-h-full'}`}>

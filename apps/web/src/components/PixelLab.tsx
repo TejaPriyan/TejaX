@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import type { AgentInfo, Mission } from '../lib/types'
 import { AGENT_MAP, STATUS_COLOR } from '../lib/agents'
 import { sound } from '../lib/sound'
+import { useStore } from '../lib/store'
 
 /* ============================================================================
    PixelLab — 2D Autonomous AI Research Facility
@@ -192,6 +193,9 @@ export default function PixelLab({
   soundEnabled,
 }: PixelLabProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const performanceMode = useStore(s => s.performanceMode)
+  const performanceRef = useRef(performanceMode)
+  performanceRef.current = performanceMode
   const stateRef = useRef({
     px: 640,
     py: 680,
@@ -273,7 +277,9 @@ export default function PixelLab({
   useEffect(() => {
     const s = stateRef.current
     const onDown = (e: KeyboardEvent) => {
+      if (document.activeElement !== canvasRef.current) return
       const key = e.key.toLowerCase()
+      if (['w','a','s','d','e','arrowup','arrowdown','arrowleft','arrowright'].includes(key)) e.preventDefault()
       s.keys.add(key)
       if (key === 'e' && s.nearStation && s.interactCooldown <= 0) {
         s.interactCooldown = 25
@@ -290,9 +296,14 @@ export default function PixelLab({
     const onUp = (e: KeyboardEvent) => {
       s.keys.delete(e.key.toLowerCase())
     }
+    const clearKeys = () => s.keys.clear()
+    window.addEventListener('blur', clearKeys)
+    canvasRef.current?.addEventListener('blur', clearKeys)
     window.addEventListener('keydown', onDown)
     window.addEventListener('keyup', onUp)
     return () => {
+      window.removeEventListener('blur', clearKeys)
+      canvasRef.current?.removeEventListener('blur', clearKeys)
       window.removeEventListener('keydown', onDown)
       window.removeEventListener('keyup', onUp)
     }
@@ -303,10 +314,10 @@ export default function PixelLab({
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
-    const scaleX = WORLD_W / rect.width
-    const scaleY = WORLD_H / rect.height
-    const mx = (e.clientX - rect.left) * scaleX
-    const my = (e.clientY - rect.top) * scaleY
+    canvas.focus()
+    const scale = Math.min(rect.width / WORLD_W, rect.height / WORLD_H)
+    const mx = (e.clientX - rect.left - (rect.width - WORLD_W * scale) / 2) / scale
+    const my = (e.clientY - rect.top - (rect.height - WORLD_H * scale) / 2) / scale
 
     // 1. Check Courier Drone Bot-09 click
     const dr = stateRef.current.drone
@@ -583,7 +594,7 @@ export default function PixelLab({
       ctx.fillStyle = 'rgba(56, 189, 248, 0.45)'
       ctx.font = '8px monospace'
       ctx.textAlign = 'left'
-      ctx.fillText('ORBITAL TELEMETRY // ALT: 418 KM  VEL: 7.66 KM/S  SECTOR 09', 28, skyH - 18)
+      ctx.fillText('TEJAX RESEARCH FACILITY // OBSERVATION DECK // SECTOR 09', 28, skyH - 18)
 
       // Warning hazard transition stripe
       for (let hx = 0; hx < W; hx += 16) {
@@ -601,40 +612,17 @@ export default function PixelLab({
       ctx.fillStyle = floorGrad
       ctx.fillRect(0, skyH, W, H - skyH)
 
-      // Hexagonal Honeycomb Deck Plate Matrix (Radius 28px, interlocking tech cells)
-      const hexR = 28
-      const hexH = Math.sqrt(3) * hexR
-      const hexW = hexR * 1.5
-      ctx.lineWidth = 1
-
-      for (let row = 0, y = skyH + 10; y < H + hexR; row++, y += hexH / 2) {
-        const xOffset = (row % 2 === 1) ? hexW : 0
-        for (let x = -hexR + xOffset; x < W + hexR * 2; x += hexW * 2) {
-          // Draw regular hexagon plate
-          ctx.beginPath()
-          for (let i = 0; i < 6; i++) {
-            const angle = (i * Math.PI) / 3
-            const hx = x + hexR * Math.cos(angle)
-            const hy = y + hexR * Math.sin(angle)
-            if (i === 0) ctx.moveTo(hx, hy)
-            else ctx.lineTo(hx, hy)
-          }
-          ctx.closePath()
-
-          // Hex fill with subtle metallic shading
-          const isHighlight = (row + Math.floor(x / hexW)) % 5 === 0
-          ctx.fillStyle = isHighlight ? '#081126' : '#050a16'
-          ctx.fill()
-
-          // Beveled hexagon seam
-          ctx.strokeStyle = isHighlight ? 'rgba(56, 189, 248, 0.12)' : 'rgba(30, 41, 59, 0.5)'
-          ctx.stroke()
-
-          // Center micro-rivet on select tiles
-          if ((row + Math.floor(x / hexW)) % 3 === 0) {
-            ctx.fillStyle = 'rgba(100, 116, 139, 0.35)'
-            ctx.fillRect(x - 1, y - 1, 2, 2)
-          }
+      // Pixel deck: alternating metal panels and recessed service channels.
+      for (let y = skyH; y < H; y += 32) {
+        for (let x = 0; x < W; x += 32) {
+          ctx.fillStyle = ((x + y) / 32 & 1) ? '#101c2c' : '#0c1726'
+          ctx.fillRect(x + 1, y + 1, 30, 30)
+          ctx.fillStyle = '#223249'
+          ctx.fillRect(x + 3, y + 3, 24, 2)
+          ctx.fillStyle = '#070d18'
+          ctx.fillRect(x + 3, y + 27, 24, 2)
+          ctx.fillStyle = '#33465d'
+          ctx.fillRect(x + 4, y + 5, 2, 2)
         }
       }
 
@@ -1292,7 +1280,7 @@ export default function PixelLab({
         // Line 2: Status Text
         ctx.fillStyle = statusColor
         ctx.font = 'bold 9px monospace'
-        ctx.fillText(agentInfo?.status || 'ONLINE', px + 22, plateY + 22)
+        ctx.fillText(agentInfo?.status || 'OFFLINE', px + 22, plateY + 22)
       }
 
       // =====================================================================
@@ -1435,9 +1423,9 @@ export default function PixelLab({
         ctx.fillText('⬡ QUANTUM CORE NEXUS', cx, hBoxY + 14)
         ctx.font = '8px monospace'
         ctx.fillStyle = '#34d399'
-        ctx.fillText('THROUGHPUT: 12.8 TFLOPS', cx, hBoxY + 28)
+        ctx.fillText(`PHASE: ${s.mission?.currentPhase || 'STANDBY'}`, cx, hBoxY + 28)
         ctx.fillStyle = '#94a3b8'
-        ctx.fillText('ACTIVE AGENTS: 8 // SYNC: 100%', cx, hBoxY + 40)
+        ctx.fillText(`ACTIVE AGENTS: ${s.agents.filter(a => a.status === 'ACTIVE').length}`, cx, hBoxY + 40)
       }
 
       // =====================================================================
@@ -1587,6 +1575,22 @@ export default function PixelLab({
         ctx.fillText('VISIT COMMAND CENTER TO START', hx, hy + 18)
       }
 
+      // Room identity: illuminated pixel signs for the four working wings.
+      const sectors = [
+        {x: 70, y: 155, label: '01 / DISCOVERY', color: '#67d5ff'},
+        {x: 765, y: 155, label: '02 / ENGINEERING', color: '#6be9b5'},
+        {x: 70, y: 490, label: '03 / OBSERVABILITY', color: '#c4a3ff'},
+        {x: 765, y: 490, label: '04 / EXPERIMENTS', color: '#ffb57e'},
+      ]
+      for (const room of sectors) {
+        ctx.fillStyle = '#030916'; ctx.fillRect(room.x, room.y, 220, 24)
+        ctx.fillStyle = room.color; ctx.fillRect(room.x, room.y, 4, 24)
+        ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'
+        ctx.fillText(room.label, room.x + 12, room.y + 16)
+        // Riveted edge and status lamps, with no invented numerical telemetry.
+        for (let j = 0; j < 3; j++) ctx.fillRect(room.x + 199 + j * 6, room.y + 8, 3, 8)
+      }
+
       // =====================================================================
       // LAYER 11: HUD Overlay & Status Bars
       // =====================================================================
@@ -1604,13 +1608,19 @@ export default function PixelLab({
       ctx.textAlign = 'right'
       const activeCount = s.agents.filter(a => a.status === 'ACTIVE').length
       ctx.fillStyle = activeCount > 0 ? '#34d399' : '#38bdf8'
-      ctx.fillText(`LAB STATUS: ${activeCount > 0 ? `${activeCount} AGENT(S) ACTIVE` : 'ALL 8 AGENTS VISIBLE & ONLINE'}`, W - 16, H - 8)
+      ctx.fillText(`LAB STATUS: ${activeCount > 0 ? `${activeCount} AGENT(S) ACTIVE` : `${s.agents.filter(a => a.status !== 'OFFLINE').length} AGENTS CONNECTED`}`, W - 16, H - 8)
       ctx.textAlign = 'left'
     }
 
-    function gameLoop() {
-      update()
-      draw()
+    let lastFrame = 0
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
+    function gameLoop(now: number) {
+      const interval = performanceRef.current || reduced.matches ? 1000 / 15 : 1000 / 30
+      if (!document.hidden && now - lastFrame >= interval) {
+        lastFrame = now
+        if (!reduced.matches || stateRef.current.keys.size) { update(); if (!performanceRef.current && !reduced.matches) update() }
+        draw()
+      }
       animId = requestAnimationFrame(gameLoop)
     }
 
@@ -1634,6 +1644,7 @@ export default function PixelLab({
           cursor: 'crosshair',
         }}
         tabIndex={0}
+        aria-label="Interactive pixel research laboratory. Focus to move with arrow keys or WASD; E inspects a nearby station. Agent buttons above provide keyboard and touch access."
       />
 
       {/* Interactive Telemetry HUD Card for Courier Drone or Quantum Nexus */}
@@ -1662,64 +1673,13 @@ export default function PixelLab({
             </button>
           </div>
 
-          {inspectedEntity === 'drone' ? (
-            <div className="space-y-2.5 text-[11px]">
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">STATUS</span>
-                <span className="text-emerald-400 font-bold">● IN FLIGHT PATROL</span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">CARGO BAY</span>
-                <span className="text-cyan-300 font-bold">Genomic Vectors / Ast</span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">THRUSTER LEVITATION</span>
-                <span className="text-white">Sub-orbital MagLev (2.4 m/s)</span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">BATTERY INDUCTION</span>
-                <span className="text-emerald-400 font-bold">99.4% Wireless Deck Link</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => sound.play('drone')}
-                className="w-full mt-2 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/30 text-xs font-bold transition-all"
-              >
-                📡 PING DRONE TELEMETRY
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2.5 text-[11px]">
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">CONTAINMENT</span>
-                <span className="text-cyan-400 font-bold">100% Superconducting</span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">HOLO-BEAM</span>
-                <span className="text-amber-400 font-bold">
-                  {stateRef.current.coreHoloActive ? '● PROJECTING' : '○ STANDBY'}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">COMPUTE THROUGHPUT</span>
-                <span className="text-emerald-400 font-bold">12.8 TFLOPS Cross-Attention</span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <span className="text-slate-400">THERMAL CRYO-STATE</span>
-                <span className="text-purple-300">12.4 Kelvin (Liquid Helium)</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  stateRef.current.coreHoloActive = !stateRef.current.coreHoloActive
-                  sound.play('holo')
-                }}
-                className="w-full mt-2 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 hover:bg-amber-500/30 text-xs font-bold transition-all"
-              >
-                ⚡ TOGGLE VOLUMETRIC HOLO-BEAM
-              </button>
-            </div>
-          )}
+          <div className="space-y-3">
+            <p className="text-slate-300">{inspectedEntity === 'drone' ? 'Ambient courier animation. It illustrates the laboratory environment; it does not transport real data.' : 'Mission control display. Workstation activity follows backend agent states.'}</p>
+            <p>Mission: {mission?.status || 'No mission loaded'}</p>
+            <p>Active agents: {agents.filter(a => a.status === 'ACTIVE').length}</p>
+            <p className="text-cyan-300">{activeMessage || 'Waiting for the next recorded activity.'}</p>
+            <button onClick={() => { stateRef.current.coreHoloActive = !stateRef.current.coreHoloActive; if (soundEnabled) sound.play('holo') }}>Toggle ambient hologram</button>
+          </div>
         </div>
       )}
     </div>

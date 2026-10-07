@@ -10,8 +10,20 @@ import type {
   TimelineEvent,
 } from './types'
 
+const env = (import.meta as unknown as { env: Record<string, string> }).env
+export const API_BASE = (env.VITE_API_URL || '').replace(/\/$/, '')
+export function wsUrl(): string {
+  const url = new URL(env.VITE_WS_URL || `${API_BASE || location.origin}/ws`, location.origin)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : url.protocol === 'http:' ? 'ws:' : url.protocol
+  return url.toString()
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20000)
+  try {
+  const res = await fetch(`${API_BASE}${path}`, {
+    signal: controller.signal,
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
@@ -19,7 +31,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => '')
     throw new Error(`${res.status} ${res.statusText} — ${text.slice(0, 200)}`)
   }
-  return res.json() as Promise<T>
+  if (!res.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('The server returned a web page instead of the API. Configure VITE_API_URL to your running TejaX backend and rebuild.')
+  }
+  const data = await res.json()
+  if (data?.ok === false) throw new Error(data.error || 'This action is not available in the current mission state.')
+  return data as T
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('The backend did not respond within 20 seconds. Retry when it is available.')
+    throw error
+  } finally { clearTimeout(timeout) }
 }
 
 export const api = {

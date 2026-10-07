@@ -12,7 +12,7 @@ const PROVIDERS = [
   { id: 'bytez', label: 'Bytez' },
   { id: 'ollama', label: 'Ollama (local)' },
   { id: 'openai_compat', label: 'Custom OpenAI-compatible' },
-  { id: 'demo', label: 'Autonomous Core (Local Engine)' },
+  { id: 'demo', label: 'Demo (deterministic, no AI model)' },
 ]
 
 export default function SettingsPage() {

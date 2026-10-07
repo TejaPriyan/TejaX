@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../lib/store'
 import { AGENT_MAP, PIPELINE_PHASES, PHASE_LABELS, STATUS_COLOR } from '../lib/agents'
 import PixelLab from './PixelLab'
+import LabConsole from './LabConsole'
 import { Badge, Pill, ProgressRing, timeStr } from './ui'
 
 export default function LabPage() {
@@ -28,8 +29,6 @@ export default function LabPage() {
   const activeAgentType = useMemo(() => {
     const activeAgent = agents.find((a) => a.status === 'ACTIVE')
     if (activeAgent) return activeAgent.type
-    const last = timeline[timeline.length - 1]
-    if (last?.agentId) return idToType.get(last.agentId) ?? null
     return null
   }, [agents, timeline, idToType])
 
@@ -67,7 +66,7 @@ export default function LabPage() {
   const phaseIndex = mission ? PIPELINE_PHASES.indexOf(mission.currentPhase as (typeof PIPELINE_PHASES)[number]) : -1
 
   return (
-    <div className="relative w-full h-full min-h-[500px] overflow-hidden">
+    <div className="lab-experience"><LabConsole /><div className="lab-world relative w-full min-h-[500px] overflow-hidden">
       {/* 2D Pixel Lab (Full Canvas Game) */}
       <div className="absolute inset-0 w-full h-full z-0">
         <PixelLab
@@ -109,7 +108,7 @@ export default function LabPage() {
 
       {/* Top-right Pipeline Phase Indicator */}
       {mission && (
-        <div className="absolute top-3 right-4 z-30 pointer-events-none hidden lg:block">
+        <div className="absolute top-14 right-4 z-30 pointer-events-none hidden xl:block">
           <div
             className="rounded-xl px-4 py-2 border flex items-center gap-2 glass"
             style={{ borderColor: 'rgba(56, 189, 248, 0.25)' }}
@@ -355,6 +354,6 @@ export default function LabPage() {
           </div>
         )
       )}
-    </div>
+    </div></div>
   )
 }

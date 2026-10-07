@@ -37,17 +37,39 @@ async def _persist_event(event: dict) -> None:
 async def lifespan(app: FastAPI):
     init_db()
     state.bus.add_listener(_persist_event)
-    state.bus.add_listener(lambda e: state.manager.broadcast(e))
+    broadcast = state.manager.broadcast
+    state.bus.add_listener(broadcast)
 
     # Seed the demo mission so the lab is alive on first launch.
     db = SessionLocal()
     try:
         from ..orchestration.demo import ensure_demo_mission
+        from ..database.models import Mission, Agent, AgentTask
+        active_states = ["PLANNING", "RESEARCHING", "DEVELOPING", "EXPERIMENTING", "EVALUATING", "IMPROVING", "PAUSED", "AWAITING_APPROVAL"]
+        for mission in db.query(Mission).filter(Mission.status.in_(active_states)):
+            mission.status = "FAILED"
+            mission.error = "The backend restarted during this run. Start a new run to retry."
+            for agent in db.query(Agent).filter_by(mission_id=mission.id, status="ACTIVE"):
+                agent.status = "ONLINE"
+                agent.current_task = "Interrupted by backend restart"
+            for task in db.query(AgentTask).filter_by(mission_id=mission.id, status="RUNNING"):
+                task.status = "FAILED"
+        db.commit()
         ensure_demo_mission(db, state.missions)
     finally:
         db.close()
 
-    yield
+    try:
+        yield
+    finally:
+        import asyncio
+        from ..orchestration.mission_service import _running
+        tasks = list(_running.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        state.bus.remove_listener(_persist_event)
+        state.bus.remove_listener(broadcast)
 
 
 def create_app() -> FastAPI:

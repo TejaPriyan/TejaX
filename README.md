@@ -25,7 +25,7 @@ USER → ENTER MISSION & DATASET → PLANNER CREATES TASKS → AGENTS EXECUTE
 ## Features
 
 - **Real Dataset Ingestion & Validation** — attach real CSV/JSON tabular records or choose from 1-click verified datasets (Titanic, California Housing, Heart Disease). Mounted directly into isolated execution workspaces for empirical ground-truth benchmarking.
-- **Evidence Classification & Mission Ledger** — automatic trust badges (`REAL EVIDENCE · DATASET VALIDATED` vs `SYNTHETIC SANDBOX`) and tamper-evident step-by-step decision audit logs.
+- **Evidence Classification & Mission Ledger** — automatic trust badges (demo/synthetic classifications; dataset attachments alone are never certified) and persisted step-by-step decision logs.
 - **Multi-agent system** — Planner, Researcher, Coder, **Tester**, Scientist,
   Critic, Analyst and Memory agents with typed, structured inter-agent messages.
 - **Task graph** — objectives → tasks with dependencies, priorities,
@@ -36,7 +36,7 @@ USER → ENTER MISSION & DATASET → PLANNER CREATES TASKS → AGENTS EXECUTE
   research and waits for an explicit Approve/Reject decision (Settings → toggle).
 - **Safe experiments** — generated code runs in an isolated subprocess
   (or Docker container) with hard time/memory/CPU limits, a restricted
-  filesystem and **no network**. Output, exit codes and metrics are captured.
+  filesystem and **network isolation only in Docker mode**. Output, exit codes and metrics are captured.
 - **Long-term memory** — curated memories with types (FACT, SOLUTION,
   FAILURE…), deduplication, keyword search and optional semantic search.
 - **Real-time events** — a standardized event stream over WebSockets drives
@@ -169,9 +169,7 @@ class ModelProvider(ABC):
     async def embed(self, text: str) -> list[float] | None: ...
 ```
 
-Register it in `build_provider()` and set `MODEL_PROVIDER` accordingly. If a
-provider errors, the orchestrator falls back to the demo provider — a missing
-model never crashes a mission.
+Register it in `build_provider()` and set `MODEL_PROVIDER` accordingly. If configured providers fail, the mission reports an error. Demo mode must be explicit; an unconfigured automatic provider uses the labeled demo.
 
 ## Creating an agent
 
@@ -196,7 +194,7 @@ The runner extracts metrics, enforces limits and records
 
 - **Generated code is always untrusted.** It runs in an isolated subprocess
   (or disposable Docker container) with memory/CPU/time limits, a restricted
-  environment, and no network access.
+  environment. Local development execution still has host filesystem/network access; production requires Docker mode.
 - The AI never controls the host machine and never receives secrets or
   environment credentials.
 - Inputs are validated (Pydantic); output sizes are truncated.
@@ -230,3 +228,7 @@ The runner extracts metrics, enforces limits and records
 ## License
 
 MIT License — Copyright (c) 2026 **Teja Priyan**. See [`LICENSE`](./LICENSE) for full details.
+
+## Deployment and verification
+
+See [the deployment guide](docs/DEPLOYMENT.md) before publishing. Vercel hosts the frontend only; configure a persistent backend and authenticated access gateway. The lab opens by default, with keyboard/touch workstation inspection, explicit connection recovery and mission controls. Cost is not metered.

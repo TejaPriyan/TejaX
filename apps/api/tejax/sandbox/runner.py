@@ -117,6 +117,8 @@ class LocalRunner(SandboxRunner):
             # Write any attached files (e.g. real datasets) into the sandbox workdir
             if files:
                 for fname, fcontent in files.items():
+                    if os.path.basename(fname) != fname or fname in (".", "..", "experiment.py"):
+                        raise ValueError("Invalid sandbox attachment filename")
                     fpath = os.path.join(workdir, fname)
                     if isinstance(fcontent, bytes):
                         with open(fpath, "wb") as f:
@@ -168,6 +170,12 @@ class LocalRunner(SandboxRunner):
                 except ProcessLookupError:
                     pass
                 out_b, err_b = await proc.communicate()
+
+            except asyncio.CancelledError:
+                if proc.returncode is None:
+                    proc.kill()
+                await proc.communicate()
+                raise
 
             elapsed = time.time() - t0
             stdout_raw = (out_b or b"").decode("utf-8", "replace")
@@ -222,8 +230,11 @@ class DockerRunner(SandboxRunner):
                     with open(fpath, "w", encoding="utf-8") as f:
                         f.write(str(fcontent))
 
+        container_name = f"tejax-exp-{uuid.uuid4().hex[:12]}"
         cmd = [
             "docker", "run", "--rm",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+            "--user", "65534:65534",
             "--network", "none",
             "--memory", f"{settings.experiment_memory_mb}m",
             "--cpus", "1",
@@ -232,7 +243,7 @@ class DockerRunner(SandboxRunner):
             "--tmpfs", "/tmp:size=64m",
             "-v", f"{workdir}:/work:ro",
             "-w", "/work",
-            "--name", f"tejax-exp-{uuid.uuid4().hex[:8]}",
+            "--name", container_name,
             "python:3.12-slim",
             "python", "experiment.py",
         ]
@@ -266,6 +277,12 @@ class DockerRunner(SandboxRunner):
         except FileNotFoundError:
             return RunResult(False, None, "", "", 0.0, {}, "Docker not available on this host", sandbox_type="DOCKER", network_isolated=False, security_warning="Docker daemon not running.")
         finally:
+            # Killing the docker client alone does not stop its container.
+            try:
+                cleanup = await asyncio.create_subprocess_exec("docker", "rm", "-f", container_name, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                await asyncio.wait_for(cleanup.wait(), timeout=10)
+            except (OSError, asyncio.TimeoutError):
+                pass
             shutil.rmtree(workdir, ignore_errors=True)
 
 
@@ -277,6 +294,9 @@ def _summarize_error(stderr: str) -> str | None:
 
 
 def build_runner() -> SandboxRunner:
-    if get_settings().sandbox_backend.lower() == "docker":
+    settings = get_settings()
+    if settings.environment == "production" and settings.sandbox_backend.lower() != "docker":
+        raise RuntimeError("Production execution requires SANDBOX_BACKEND=docker; local execution is for trusted development only.")
+    if settings.sandbox_backend.lower() == "docker":
         return DockerRunner()
     return LocalRunner()

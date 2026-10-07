@@ -8,6 +8,9 @@ import io
 import json
 import os
 import re
+import uuid
+from pathlib import Path
+from pydantic import Field
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -71,9 +74,27 @@ def _inspect_dataset(filename: str, content: str) -> dict[str, Any]:
     }
 
 
+def _safe_dataset_name(filename: str) -> str:
+    if "/" in filename or "\\" in filename or filename in (".", ".."):
+        raise HTTPException(422, "Use a filename without directory paths.")
+    name = re.sub(r"[^\w\-.]", "_", filename)
+    if Path(name).suffix.lower() not in (".csv", ".json"):
+        raise HTTPException(422, "Only CSV and JSON datasets are supported.")
+    return name
+
+
+def _validated_dataset(filename: str, content: str) -> dict:
+    if len(content.encode("utf-8")) > 2_000_000:
+        raise HTTPException(413, "Dataset exceeds the 2 MB limit.")
+    meta = _inspect_dataset(filename, content)
+    if not meta["rows"] or not meta["columns"]:
+        raise HTTPException(422, "Dataset must contain tabular records and column names.")
+    return meta
+
+
 class DatasetUploadBody(ApiModel):
-    filename: str
-    content: str
+    filename: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=2_000_000)
 
 
 # --- Datasets -----------------------------------------------------------
@@ -87,12 +108,8 @@ async def upload_dataset(body: DatasetUploadBody):
     filename = body.filename or "dataset.csv"
     content = body.content or ""
 
-    safe_name = re.sub(r"[^\w\-.]", "_", os.path.basename(filename))
-    file_path = os.path.join(datasets_dir, safe_name)
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    meta = _inspect_dataset(safe_name, content)
+    safe_name = _safe_dataset_name(filename)
+    meta = _validated_dataset(safe_name, content)
     meta["content"] = content
     return meta
 
@@ -108,14 +125,13 @@ async def create_mission(body: MissionCreate, db: Session = Depends(get_db)):
     dataset_filename = body.dataset_filename
     dataset_metadata = body.dataset_metadata
 
-    if body.dataset_content and dataset_filename:
-        safe_name = re.sub(r"[^\w\-.]", "_", os.path.basename(dataset_filename))
-        file_path = os.path.join(datasets_dir, safe_name)
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(body.dataset_content)
-        dataset_filename = safe_name
-        if not dataset_metadata:
-            dataset_metadata = _inspect_dataset(safe_name, body.dataset_content)
+    if dataset_filename or body.dataset_content:
+        if not dataset_filename or not body.dataset_content:
+            raise HTTPException(422, "Provide both the dataset filename and content.")
+        safe_name = _safe_dataset_name(dataset_filename)
+        dataset_metadata = _validated_dataset(safe_name, body.dataset_content)
+        dataset_filename = f"{uuid.uuid4().hex}_{safe_name}"
+        (Path(datasets_dir) / dataset_filename).write_text(body.dataset_content, encoding="utf-8")
 
     mission = state.missions.create(
         db,

@@ -96,18 +96,26 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             "state": state_dict,
         }
 
+        mission.report = None
+        mission.error = None
+        mission.completed_at = None
+        from ..database.models import Agent
+        for agent in db.query(Agent).filter_by(mission_id=mission_id):
+            agent.status = AgentStatus.ONLINE
+            agent.progress = 0.0
+            agent.current_task = None
         mission.status = MissionStatus.PLANNING
         mission.started_at = datetime.now(timezone.utc)
         mission.current_phase = "UNDERSTANDING"
         db.commit()
 
         await bus.publish(make_event(EventType.MISSION_STARTED, mission_id))
-        await _checkpoint(ctrl)
+        await _checkpoint(ctrl, db, mission, bus)
 
         # ---- PHASE 1: UNDERSTANDING + PLANNING ---------------------
         planner: Planner = AGENT_REGISTRY["planner"]()
         plan = await planner.run(_make_ctx(ctx))
-        await _checkpoint(ctrl)
+        await _checkpoint(ctrl, db, mission, bus)
 
         mission.current_phase = "PLANNING"
         db.commit()
@@ -146,7 +154,7 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
         await bus.publish(make_event(EventType.PLANNING_COMPLETED, mission_id, None, {
             "objectiveCount": len(objectives), "taskCount": len(tasks),
         }))
-        await _checkpoint(ctrl)
+        await _checkpoint(ctrl, db, mission, bus)
 
         # ---- PHASE 2: RESEARCH -------------------------------------
         mission.status = MissionStatus.RESEARCHING
@@ -161,7 +169,7 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             "summary": research.get("summary", "")[:300],
         }))
         ctx["state"]["research"] = research
-        await _checkpoint(ctrl)
+        await _checkpoint(ctrl, db, mission, bus)
 
         # ---- HUMAN APPROVAL GATE (optional) ------------------------
         if _human_approval_enabled():
@@ -169,7 +177,7 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             mission.current_phase = "APPROVAL"
             db.commit()
             await _wait_approval(ctrl, bus, mission_id)
-            await _checkpoint(ctrl)
+            await _checkpoint(ctrl, db, mission, bus)
 
         # ---- PHASE 3: DEVELOPMENT ----------------------------------
         mission.status = MissionStatus.DEVELOPING
@@ -182,14 +190,14 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
         await bus.publish(make_event(EventType.CODE_GENERATED, mission_id, None, {
             "name": ctx["state"].get("solution", {}).get("name"),
         }))
-        await _checkpoint(ctrl)
+        await _checkpoint(ctrl, db, mission, bus)
 
         # ---- TESTING (new) -----------------------------------------
         tester: Tester = AGENT_REGISTRY["tester"]()
         await _mark_task(db, bus, tasks, "tester", TaskStatus.RUNNING)
-        await tester.run(_make_ctx(ctx))
-        await _mark_task(db, bus, tasks, "tester", TaskStatus.COMPLETED)
-        await _checkpoint(ctrl)
+        test_result = await tester.run(_make_ctx(ctx))
+        await _mark_task(db, bus, tasks, "tester", TaskStatus.COMPLETED if test_result["passed"] else TaskStatus.FAILED)
+        await _checkpoint(ctrl, db, mission, bus)
 
         # ---- PHASES 4-6: EXPERIMENT → CRITIQUE → IMPROVEMENT --------
         scientist: Scientist = AGENT_REGISTRY["scientist"]()
@@ -203,13 +211,15 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
         final_analysis: dict[str, Any] = {}
 
         for iteration in range(1, max_iterations + 1):
-            await _checkpoint(ctrl)
+            await _checkpoint(ctrl, db, mission, bus)
 
             # EXPERIMENT
             mission.status = MissionStatus.EXPERIMENTING
             mission.current_phase = "EXPERIMENT"
             db.commit()
+            await _mark_task(db, bus, tasks, "scientist", TaskStatus.RUNNING)
             exp = await scientist.run(_make_ctx(ctx), task={"iteration": iteration})
+            await _mark_task(db, bus, tasks, "scientist", TaskStatus.COMPLETED)
             ctx["state"]["last_experiment"] = exp
             score = (exp.get("metrics") or {}).get("score")
             if isinstance(score, (int, float)):
@@ -223,19 +233,23 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             )
             db.add(result_row)
             db.commit()
-            await _checkpoint(ctrl)
+            await _checkpoint(ctrl, db, mission, bus)
 
             # ANALYST (evaluation)
             mission.status = MissionStatus.EVALUATING
             mission.current_phase = "CRITIQUE"
             db.commit()
+            await _mark_task(db, bus, tasks, "analyst", TaskStatus.RUNNING)
             final_analysis = await analyst.run(_make_ctx(ctx))
+            await _mark_task(db, bus, tasks, "analyst", TaskStatus.COMPLETED)
             result_row.analysis = final_analysis
             db.commit()
-            await _checkpoint(ctrl)
+            await _checkpoint(ctrl, db, mission, bus)
 
             # CRITIC
+            await _mark_task(db, bus, tasks, "critic", TaskStatus.RUNNING)
             critique = await critic.run(_make_ctx(ctx))
+            await _mark_task(db, bus, tasks, "critic", TaskStatus.COMPLETED)
             result_row.critique = critique
             db.commit()
             await bus.publish(make_event(EventType.CRITIQUE_CREATED, mission_id, None, {
@@ -258,7 +272,7 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             await bus.publish(make_event(EventType.IMPROVEMENT_CREATED, mission_id, None, {
                 "iteration": iteration,
             }))
-            await _checkpoint(ctrl)
+            await _checkpoint(ctrl, db, mission, bus)
 
         # ---- PHASE 7: FINAL RESULT --------------------------------
         mission.status = MissionStatus.EVALUATING
@@ -266,8 +280,10 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
         db.commit()
 
         memory_agent: MemoryAgent = AGENT_REGISTRY["memory"]()
+        await _mark_task(db, bus, tasks, "memory", TaskStatus.RUNNING)
         await memory_agent.run(_make_ctx(ctx))
-        await _checkpoint(ctrl)
+        await _mark_task(db, bus, tasks, "memory", TaskStatus.COMPLETED)
+        await _checkpoint(ctrl, db, mission, bus)
 
         report = _build_report(ctx, plan, research, critique, improvements, final_analysis, failures)
         mission.report = report
@@ -300,6 +316,7 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
                 event_type = EventType.MISSION_CANCELLED if mission.status == MissionStatus.CANCELLED else EventType.MISSION_PAUSED
                 await bus.publish(make_event(event_type, mission_id))
     except Exception as exc:  # never crash the process on a failed mission
+        db.rollback()
         mission = db.get(Mission, mission_id)
         if mission:
             mission.status = MissionStatus.FAILED
@@ -308,6 +325,17 @@ async def run_mission(mission_id: str, bus: EventBus | None = None) -> None:
             db.commit()
         await bus.publish(make_event(EventType.MISSION_FAILED, mission_id, None, {"error": str(exc)[:300]}))
     finally:
+        db.rollback()
+        current = db.get(Mission, mission_id)
+        if current and current.status in (MissionStatus.FAILED, MissionStatus.CANCELLED, MissionStatus.REJECTED):
+            current.completed_at = datetime.now(timezone.utc)
+            for task in db.query(AgentTask).filter(AgentTask.mission_id == mission_id, AgentTask.status.in_([TaskStatus.RUNNING, TaskStatus.PENDING])):
+                task.status = TaskStatus.FAILED if current.status == MissionStatus.FAILED else TaskStatus.CANCELLED
+        from ..database.models import Agent
+        for agent in db.query(Agent).filter_by(mission_id=mission_id, status=AgentStatus.ACTIVE):
+            agent.status = AgentStatus.ONLINE
+            agent.current_task = "Run stopped"
+        db.commit()
         db.close()
         _running.pop(mission_id, None)
         _controls.pop(mission_id, None)
@@ -331,6 +359,7 @@ async def _mark_task(db: Session, bus: EventBus, tasks: list[AgentTask], agent_t
             t.status = status
             if status == TaskStatus.RUNNING and not t.started_at:
                 t.started_at = datetime.now(timezone.utc)
+                t.attempts += 1
             if status == TaskStatus.COMPLETED:
                 t.completed_at = datetime.now(timezone.utc)
             db.commit()
@@ -342,18 +371,26 @@ async def _mark_task(db: Session, bus: EventBus, tasks: list[AgentTask], agent_t
             await bus.publish(make_event(event, t.mission_id, None, {
                 "taskId": t.id, "agentType": t.agent_type, "description": t.description,
             }))
-            return
 
 
-async def _checkpoint(ctrl: dict[str, asyncio.Event]) -> None:
+async def _checkpoint(ctrl: dict[str, asyncio.Event], db=None, mission=None, bus=None) -> None:
     if ctrl.get("cancel", asyncio.Event()).is_set():
         raise _Stop()
     if ctrl.get("pause", asyncio.Event()).is_set():
+        previous = mission.status if mission else None
+        if mission:
+            mission.status = MissionStatus.PAUSED
+            db.commit()
+            await bus.publish(make_event(EventType.MISSION_PAUSED, mission.id))
         # Wait until paused is cleared or cancelled.
         while ctrl.get("pause", asyncio.Event()).is_set():
             if ctrl.get("cancel", asyncio.Event()).is_set():
                 raise _Stop()
             await asyncio.sleep(0.2)
+        if mission:
+            mission.status = previous
+            db.commit()
+            await bus.publish(make_event("MISSION_RESUMED", mission.id))
 
 
 def _human_approval_enabled() -> bool:
@@ -416,15 +453,12 @@ def _build_report(
 
     # --- Evidence classification ---
     has_dataset = bool(getattr(mission, "dataset_filename", None))
-    if has_dataset:
-        evidence_type = EvidenceType.REAL
-    else:
-        evidence_type = exp.get("evidence_type", EvidenceType.DEMO if is_demo else EvidenceType.SYNTHETIC)
+    evidence_type = exp.get("evidence_type", EvidenceType.DEMO if is_demo else EvidenceType.SYNTHETIC)
     sandbox_security = exp.get("sandbox_type", "LOCAL")
 
     confidence = "Insufficient evidence"
     if isinstance(score, (int, float)):
-        if has_dataset:
+        if evidence_type == EvidenceType.REAL:
             if score >= 0.85:
                 confidence = f"High — validated against real dataset '{mission.dataset_filename}' ({provider_label})."
             elif score >= 0.65:
@@ -445,8 +479,8 @@ def _build_report(
                 confidence = "Low — below the acceptance threshold."
 
     limitations = [
-        f"Model provider: {provider_label} ({'real dataset evaluation' if has_dataset else 'synthetic benchmark' if not is_demo else 'deterministic simulation'}).",
-        f"Evidence type: {evidence_type} — {'evaluated on real user dataset: ' + mission.dataset_filename if has_dataset else 'evaluation ran inside sandbox on synthetic data'}.",
+        f"Model provider: {provider_label} ({'dataset attached; evaluation not independently verified' if has_dataset else 'synthetic benchmark' if not is_demo else 'deterministic simulation'}).",
+        f"Evidence type: {evidence_type} — {'dataset attachment does not establish validated evidence: ' + mission.dataset_filename if has_dataset else 'evaluation ran inside sandbox on synthetic data'}.",
         f"Sandbox: {sandbox_security} — {'network not isolated' if sandbox_security == 'LOCAL' else 'network disabled, read-only FS'}.",
     ]
     if is_demo and not has_dataset:
