@@ -98,6 +98,18 @@ cd tejax
 
 ### Running locally (no paid APIs, no Docker)
 
+**Windows: double-click `Start-TejaX.cmd`.** It installs dependencies on the
+first run, builds the website and opens **http://127.0.0.1:8765**. Backend,
+website and WebSocket share that address, so no backend URL needs configuring.
+Keep the terminal open; press Ctrl+C to stop. Python 3.12 and Node.js LTS must
+be installed. See [the local setup guide](docs/LOCAL_SETUP.md).
+
+The launcher starts in free demo mode and stores missions in `.local-lab/data`.
+It is accessible only on your computer. Local subprocess execution is for
+trusted personal use; it does not isolate the host filesystem or network.
+
+For development with separate servers:
+
 **1. Backend**
 
 ```bash
