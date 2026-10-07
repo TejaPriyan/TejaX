@@ -175,7 +175,7 @@ export default function SettingsPage() {
 
           {health && provider !== 'demo' && (
             <div className="text-[11px] font-mono flex items-center gap-2">
-              {health.ok ? (
+              {health.ok === null ? <span className="text-amber-200">● not tested — use Test connection</span> : health.ok ? (
                 <span className="text-[#34d399]">● connected</span>
               ) : (
                 <span className="text-[#fb7185]">● unreachable{health.error ? ` — ${health.error.slice(0, 90)}` : ''}</span>

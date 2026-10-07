@@ -298,7 +298,7 @@ def system_status(db: Session = Depends(get_db)):
         "modelStatus": {
             "provider": provider.name,
             "model": getattr(provider, "model", "") or "tejax-core-engine",
-            "ok": True,
+            "ok": True if provider.name == "demo" else None,
         },
     }
 

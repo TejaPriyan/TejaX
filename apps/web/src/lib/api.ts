@@ -118,5 +118,5 @@ export interface ModelStatus {
   config: { provider: string; model: string; base_url: string; api_key: string; human_approval: boolean }
   effectiveProvider: string
   effectiveModel: string
-  health: { provider: string; ok: boolean; models?: string[]; error?: string }
+  health: { provider: string; ok: boolean | null; models?: string[]; error?: string }
 }

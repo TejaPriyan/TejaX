@@ -64,7 +64,8 @@ class ModelProvider(ABC):
         return None
 
     async def health(self) -> dict[str, Any]:
-        return {"provider": self.name, "ok": True}
+        return {"provider": self.name, "ok": True if self.name == "demo" else None,
+                "note": "Use Test connection to verify a configured model."}
 
 
 # --- Shared HTTP helper ---------------------------------------------------

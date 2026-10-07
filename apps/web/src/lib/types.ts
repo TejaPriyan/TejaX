@@ -142,7 +142,7 @@ export interface SystemStatus {
   runningMissions: number
   websocketClients: number
   humanApproval: boolean
-  modelStatus: { provider: string; model: string; ok: boolean }
+  modelStatus: { provider: string; model: string; ok: boolean | null }
 }
 
 export interface SystemMetrics {
