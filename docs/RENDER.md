@@ -34,6 +34,9 @@ fallback is exposed. Inputs go to Groq; the UI states this before submission.
 Limits: 32 KB request body, 300-character title, 4,000-character context,
 five model calls of at most 1,600 completion tokens, one mission globally at
 a time, three runs per browser per hour, and twenty starts per server process.
+Each stage retries HTTP 429 at most twice when the provider requests a wait
+of no more than 60 seconds. Missions have a five-minute overall timeout.
+Previous-stage context is capped to keep requests small for the free tier.
 The global limit bounds cookie-reset bypass. These are beta limits, not a
 billing guarantee; set provider-side limits and use a free Groq account if
 zero paid usage is required. A Render restart resets process counters.

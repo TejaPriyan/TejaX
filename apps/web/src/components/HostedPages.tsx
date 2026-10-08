@@ -22,7 +22,7 @@ export function HostedCommand() {
     <label className="block">Mission<input className="field px-4 py-3 mt-2" maxLength={300} value={title} onChange={e => setTitle(e.target.value)} placeholder="Design a study planner for college students" /></label>
     <label className="block">Context<textarea className="field px-4 py-3 mt-2" maxLength={4000} rows={5} value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe your requirements and constraints. Do not include secrets or sensitive data." /></label>
     <p className="text-sm text-amber-200">Your mission text is sent to Groq. Results belong to this browser session and may disappear when Render restarts. Save any results you need.</p>
-    <p className="text-sm text-dim">Beta limits: one mission at a time across the service, three runs per browser per hour, twenty total runs per server session. Each mission makes five model requests.</p>
+    <p className="text-sm text-dim">Beta limits: one mission at a time across the service, three runs per browser per hour, twenty total runs per server session. Each mission has five AI stages; brief provider limits may delay a stage.</p>
     {error && <p role="alert" className="text-err">{error}</p>}
     <button className="btn-primary" disabled={busy || title.trim().length < 3} onClick={() => void launch()}>{busy ? 'Starting…' : 'Start AI mission'}</button>
   </div>

@@ -3,9 +3,28 @@ import time
 
 from fastapi.testclient import TestClient
 import pytest
+import httpx
 from starlette.websockets import WebSocketDisconnect
 
 from tejax.hosted import create_hosted_app
+from tejax import hosted
+
+
+def test_groq_retries_short_rate_limit_without_exposing_key(monkeypatch):
+    calls, waits = [], []
+    def respond(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={'retry-after': '2'})
+        return httpx.Response(200, json={'choices': [{'message': {'content': 'Real response'}}], 'usage': {}})
+    client = httpx.AsyncClient
+    monkeypatch.setenv('GROQ_API_KEY', 'test-only-key')
+    monkeypatch.setattr(hosted.httpx, 'AsyncClient', lambda **kw: client(transport=httpx.MockTransport(respond), **kw))
+    async def sleep(delay):
+        waits.append(delay)
+    monkeypatch.setattr(hosted.asyncio, 'sleep', sleep)
+    answer, _ = asyncio.run(hosted.groq_generate('Help', 'Plan'))
+    assert answer == 'Real response' and waits == [2] and len(calls) == 2
 
 
 def wait_done(client, mid):

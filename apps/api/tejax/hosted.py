@@ -43,12 +43,22 @@ async def groq_generate(system: str, prompt: str):
     if not key:
         raise RuntimeError('The operator has not configured the Groq API key.')
     async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post('https://api.groq.com/openai/v1/chat/completions',
-            headers={'Authorization': f'Bearer {key}'}, json={
+        for attempt in range(3):
+            response = await client.post('https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {key}'}, json={
                 'model': os.getenv('GROQ_MODEL', 'openai/gpt-oss-120b'),
                 'messages': [{'role': 'system', 'content': system}, {'role': 'user', 'content': prompt}],
                 'max_completion_tokens': 1600, 'temperature': .3,
-            })
+                })
+            if response.status_code != 429 or attempt == 2:
+                break
+            try:
+                delay = float(response.headers.get('retry-after', '20'))
+            except ValueError:
+                delay = 20
+            if not 0 <= delay <= 60:
+                break
+            await asyncio.sleep(max(1, delay))
     if response.status_code == 429:
         raise RuntimeError('Groq usage limit reached. Wait and retry later.')
     if response.status_code in (401, 403):
@@ -173,7 +183,7 @@ def create_hosted_app(db_path=None, generate=None, secure=None):
                 task['status'], task['attempts'] = 'RUNNING', 1
                 await event(owner, m, 'AGENT_STATUS', {'agentType': role, 'status': 'ACTIVE', 'currentTask': instruction, 'progress': .2})
                 prompt = f"Mission: {m['title']}\nContext: {m['description']}\n"
-                prompt += '\n'.join(f'{STAGES[i][0]}: {value[:6000]}' for i, value in enumerate(outputs))
+                prompt += '\n'.join(f'{STAGES[i][0]}: {value[:1500]}' for i, value in enumerate(outputs))
                 before = time.monotonic()
                 try:
                     text, usage = await generate(
