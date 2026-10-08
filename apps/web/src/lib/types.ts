@@ -50,7 +50,7 @@ export interface AgentInfo {
 }
 
 export type EvidenceType = 'REAL' | 'SYNTHETIC' | 'DEMO' | 'UNKNOWN'
-export type SandboxSecurity = 'LOCAL' | 'DOCKER' | 'RESTRICTED'
+export type SandboxSecurity = 'LOCAL' | 'DOCKER' | 'RESTRICTED' | 'DISABLED'
 
 export interface LedgerStep {
   step: number
@@ -132,6 +132,8 @@ export interface Report {
 }
 
 export interface SystemStatus {
+  hosted?: boolean
+  notice?: string
   app: string
   version: string
   mode: string

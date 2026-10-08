@@ -152,7 +152,9 @@ export const useStore = create<State>((set, get) => ({
 
   refreshSystem: async () => {
     try {
-      const [status, metrics] = await Promise.all([api.systemStatus(), api.systemMetrics()])
+      // Establish the hosted browser session before issuing other API requests.
+      const status = await api.systemStatus()
+      const metrics = await api.systemMetrics()
       set({ systemStatus: status, metrics, connectionError: null, loading: false })
     } catch (e) {
       set({ connectionError: message(e), loading: false })

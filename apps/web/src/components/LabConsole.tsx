@@ -22,7 +22,7 @@ export default function LabConsole() {
       <div className="lab-reading"><strong>{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2,'0')}</strong><span>Elapsed wall time</span></div>
       <div className="lab-reading"><strong>{s.experiments.length}</strong><span>Experiments</span></div>
       <div className="lab-actions">
-        <button disabled={busy || !!s.connectionError || s.loading || running} onClick={() => void act(async () => { const id = await s.runDemo(); if (!id) throw new Error(useStore.getState().connectionError || 'Could not start demo') })}>▶ Run demo mission</button>
+        {!s.systemStatus?.hosted && <button disabled={busy || !!s.connectionError || s.loading || running} onClick={() => void act(async () => { const id = await s.runDemo(); if (!id) throw new Error(useStore.getState().connectionError || 'Could not start demo') })}>▶ Run demo mission</button>}
         <button onClick={() => s.setPage('command')}>＋ New mission</button>
         {running && mission && <button disabled={busy} onClick={() => void act(() => s.pauseMission(mission.id))}>Pause</button>}
         {mission?.status === 'PAUSED' && <button disabled={busy} onClick={() => void act(() => s.startMission(mission.id))}>Resume</button>}
@@ -37,6 +37,6 @@ export default function LabConsole() {
       const agent = s.agents.find(a => a.type === meta.type)
       return <button key={meta.type} aria-pressed={s.selectedAgentType === meta.type} onClick={() => s.setSelectedAgentType(meta.type)} style={{ '--station-color': meta.color } as React.CSSProperties}><span className={agent?.status === 'ACTIVE' ? 'station-light active' : 'station-light'} /><strong>{meta.name}</strong><small>{agent?.status || 'OFFLINE'}</small></button>
     })}</div>
-    <p className="lab-disclosure">Demo mode runs a deterministic pipeline, not a live AI model. Experiment output is recorded; attaching data does not establish validated evidence. Provider cost is not yet metered.</p>
+    <p className="lab-disclosure">{s.systemStatus?.notice || 'Demo mode runs a deterministic pipeline, not a live AI model. Experiment output is recorded; attaching data does not establish validated evidence. Provider cost is not yet metered.'}</p>
   </section>
 }
