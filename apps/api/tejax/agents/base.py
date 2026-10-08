@@ -113,7 +113,7 @@ class AgentContext:
                 error=str(exc)[:400],
             ))
             self.db.commit()
-            return ""
+            raise RuntimeError(f"Model provider failed for {agent_type}; check provider settings and retry.") from exc
 
     async def pacing(self, scale: float = 1.0) -> None:
         """Short pause so live activity is watchable; 0 when a real model runs."""

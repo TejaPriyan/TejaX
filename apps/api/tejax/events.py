@@ -50,6 +50,10 @@ class EventBus:
     def add_listener(self, fn: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
         self._listeners.append(fn)
 
+    def remove_listener(self, fn) -> None:
+        if fn in self._listeners:
+            self._listeners.remove(fn)
+
     # --- publishing ------------------------------------------------------
     async def publish(self, event: dict[str, Any]) -> None:
         self._history.append(event)

@@ -119,13 +119,13 @@ class Planner(BaseAgent):
             for t in _TOPIC_OBJECTIVES[topic]
         ]
         default_tasks = [
-            PlanTask(agent_type=AgentType.RESEARCHER, description="Research the problem domain and existing approaches", dependencies=[]),
-            PlanTask(agent_type=AgentType.RESEARCHER, description="Summarize candidate methods and datasets", dependencies=[0]),
-            PlanTask(agent_type=AgentType.CODER, description="Design and write the baseline prototype", dependencies=[1]),
-            PlanTask(agent_type=AgentType.SCIENTIST, description="Design and run the evaluation experiment", dependencies=[2]),
-            PlanTask(agent_type=AgentType.CRITIC, description="Adversarial review of solution and results", dependencies=[3]),
-            PlanTask(agent_type=AgentType.CODER, description="Revise the prototype from critique", dependencies=[4]),
-            PlanTask(agent_type=AgentType.ANALYST, description="Final evaluation and report synthesis", dependencies=[5]),
+            PlanTask(agent_type=AgentType.RESEARCHER, description="Research and summarize candidate approaches", dependencies=[]),
+            PlanTask(agent_type=AgentType.CODER, description="Write an experiment prototype", dependencies=[0]),
+            PlanTask(agent_type=AgentType.TESTER, description="Validate prototype execution and metric format", dependencies=[1]),
+            PlanTask(agent_type=AgentType.SCIENTIST, description="Execute and record the experiment", dependencies=[2]),
+            PlanTask(agent_type=AgentType.ANALYST, description="Interpret measured output", dependencies=[3]),
+            PlanTask(agent_type=AgentType.CRITIC, description="Review assumptions and recommend revisions", dependencies=[4]),
+            PlanTask(agent_type=AgentType.MEMORY, description="Store findings and limitations", dependencies=[5]),
         ]
         understanding = (
             f"The mission is to design and prototype a solution for: {ctx.mission.title}. "

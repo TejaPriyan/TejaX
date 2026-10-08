@@ -16,11 +16,12 @@ export default function Sidebar() {
   const page = useStore((s) => s.page)
   const setPage = useStore((s) => s.setPage)
   const setView = useStore((s) => s.setView)
+  const connectionError = useStore((s) => s.connectionError)
   const wsConnected = useStore((s) => s.wsConnected)
   const systemStatus = useStore((s) => s.systemStatus)
 
   return (
-    <aside className="w-56 shrink-0 h-full glass-strong border-r hairline flex flex-col z-20">
+    <aside className="lab-sidebar w-56 shrink-0 h-full glass-strong border-r hairline flex flex-col z-20">
       {/* Brand */}
       <button
         onClick={() => setPage('command')}
@@ -74,7 +75,7 @@ export default function Sidebar() {
       <div className="px-4 py-4 border-t hairline space-y-2.5">
         <div className="flex items-center gap-2 text-[11px] text-dim">
           <StatusDot status={wsConnected ? 'ONLINE' : 'OFFLINE'} />
-          <span>{wsConnected ? 'Realtime link' : 'Reconnecting…'}</span>
+          <span>{connectionError ? 'Backend unavailable' : wsConnected ? 'Realtime link' : 'Polling updates'}</span>
         </div>
         <div className="text-[10px] text-faint font-mono leading-relaxed">
           {systemStatus ? (
@@ -84,7 +85,7 @@ export default function Sidebar() {
               model: {systemStatus.modelStatus.model}
             </>
           ) : (
-            'initializing…'
+            connectionError ? 'Connection needs attention' : 'Connecting to backend…'
           )}
         </div>
         <button
