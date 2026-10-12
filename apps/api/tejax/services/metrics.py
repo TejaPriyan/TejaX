@@ -45,7 +45,7 @@ def compute_metrics(db: Session) -> dict:
     iterations = db.scalar(select(func.avg(Experiment.iteration))) or 0
 
     agents_active = db.scalar(
-        select(func.count(Agent.id)).where(Agent.status.in_([AgentStatus.ACTIVE, AgentStatus.ONLINE]))
+        select(func.count(Agent.id)).where(Agent.status == AgentStatus.ACTIVE)
     ) or 0
     agents_total = db.scalar(select(func.count(Agent.id))) or 0
 
@@ -56,7 +56,7 @@ def compute_metrics(db: Session) -> dict:
     error_recovery_rate = 0.0
     if (tasks_failed + tasks_done) > 0:
         # recovered = tasks that failed at least once but eventually completed
-        recovered = tasks_done  # proxy: final state success
+        recovered = db.scalar(select(func.count(AgentTask.id)).where(AgentTask.status == "COMPLETED", AgentTask.attempts > 1)) or 0
         error_recovery_rate = round(100 * recovered / (tasks_failed + tasks_done), 1)
 
     return {

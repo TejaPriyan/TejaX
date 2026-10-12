@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { api } from './api'
+import { api, wsUrl } from './api'
 import { sound } from './sound'
 import type {
   AgentInfo,
@@ -41,6 +41,9 @@ interface State {
   memoryResults: MemoryItem[]
   observability: unknown
   wsConnected: boolean
+  connectionError: string | null
+  loading: boolean
+  stop: () => void
   performanceMode: boolean
   selectedAgentType: string | null
   soundEnabled: boolean
@@ -73,16 +76,20 @@ interface State {
   connectWs: () => void
 }
 
-function wsUrl(): string {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${proto}://${location.host}/ws`
-}
+let polling: ReturnType<typeof setTimeout> | undefined
+let reconnect: ReturnType<typeof setTimeout> | undefined
+let socket: WebSocket | null = null
+let generation = 0
+let selection = 0
+let booted = false
+const message = (e: unknown) => e instanceof Error ? e.message : 'Backend unavailable'
 
 // URL parameter or hash check
 const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
 const hash = typeof window !== 'undefined' ? window.location.hash : ''
 const defaultView: View = (searchParams?.get('view') as View) || (hash === '#site' ? 'site' : 'app')
-const defaultPage: Page = (searchParams?.get('page') as Page) || 'command'
+const requestedPage = searchParams?.get('page')
+const defaultPage: Page = (['command','missions','lab','agents','experiments','memory','analytics','settings'].includes(requestedPage || '') ? requestedPage : 'lab') as Page
 
 export const useStore = create<State>((set, get) => ({
   view: defaultView,
@@ -99,6 +106,8 @@ export const useStore = create<State>((set, get) => ({
   memoryResults: [],
   observability: null,
   wsConnected: false,
+  connectionError: null,
+  loading: true,
   performanceMode: false,
   selectedAgentType: null,
   soundEnabled: sound.enabled,
@@ -114,32 +123,41 @@ export const useStore = create<State>((set, get) => ({
   },
 
   boot: async () => {
-    get().connectWs()
-    await Promise.all([get().refreshSystem(), get().loadMissions()])
-    const missions = get().missions
-    if (missions.length && !get().selectedMissionId) {
-      // auto-select most recent
-      await get().selectMission(missions[0].id)
-    }
-    // Gentle polling keeps mission status/phase/experiments fresh while running.
-    setInterval(() => {
-      const s = get()
-      if (!s.selectedMissionId) return
-      const status = s.mission?.status
-      const running = ['CREATED', 'PLANNING', 'RESEARCHING', 'DEVELOPING', 'EXPERIMENTING', 'EVALUATING', 'IMPROVING'].includes(status ?? '')
-      if (running) {
-        s.selectMission(s.selectedMissionId!).catch(() => {})
+    if (booted) return
+    booted = true
+    const current = ++generation
+    const sync = async () => {
+      if (current !== generation) return
+      await get().refreshSystem()
+      if (current !== generation) return
+      if (!get().connectionError) {
+        get().connectWs()
+        await get().loadMissions()
+        const id = get().selectedMissionId || get().missions[0]?.id
+        if (id) await get().selectMission(id)
       }
-      s.refreshSystem()
-    }, 4000)
+      if (current === generation) polling = setTimeout(sync, 4000)
+    }
+    await sync()
+  },
+  stop: () => {
+    booted = false
+    generation++
+    selection++
+    clearTimeout(polling)
+    clearTimeout(reconnect)
+    if (socket) { socket.onclose = null; socket.close(); socket = null }
+    set({ wsConnected: false })
   },
 
   refreshSystem: async () => {
     try {
-      const [status, metrics] = await Promise.all([api.systemStatus(), api.systemMetrics()])
-      set({ systemStatus: status, metrics })
-    } catch {
-      /* offline — UI still renders */
+      // Establish the hosted browser session before issuing other API requests.
+      const status = await api.systemStatus()
+      const metrics = await api.systemMetrics()
+      set({ systemStatus: status, metrics, connectionError: null, loading: false })
+    } catch (e) {
+      set({ connectionError: message(e), loading: false })
     }
   },
 
@@ -147,13 +165,14 @@ export const useStore = create<State>((set, get) => ({
     try {
       const missions = await api.listMissions()
       set({ missions })
-    } catch {
-      /* ignore */
+    } catch (e) {
+      set({ connectionError: message(e) })
     }
   },
 
   selectMission: async (id) => {
-    set({ selectedMissionId: id, selectedAgentType: null })
+    const token = ++selection
+    if (get().selectedMissionId !== id) set({ selectedMissionId: id, selectedAgentType: null, mission: null, agents: [], timeline: [], tasks: [], experiments: [] })
     try {
       const [mission, agents, experiments, tasks, timeline] = await Promise.all([
         api.getMission(id),
@@ -162,9 +181,9 @@ export const useStore = create<State>((set, get) => ({
         api.missionTasks(id),
         api.missionTimeline(id),
       ])
-      set({ mission, agents, experiments, tasks, timeline })
-    } catch {
-      /* ignore */
+      if (token === selection && get().selectedMissionId === id) set({ mission, agents, experiments, tasks, timeline })
+    } catch (e) {
+      set({ connectionError: message(e) })
     }
   },
 
@@ -213,7 +232,7 @@ export const useStore = create<State>((set, get) => ({
       await get().selectMission(res.missionId)
       return res.missionId
     } catch (e) {
-      console.error(e)
+      set({ connectionError: message(e) })
       return null
     }
   },
@@ -231,7 +250,7 @@ export const useStore = create<State>((set, get) => ({
   handleEvent: (ev) => {
     const s = get()
     if (ev.missionId && ev.missionId === s.selectedMissionId) {
-      const timeline = [...s.timeline, ev].slice(-400)
+      const timeline = [...s.timeline.filter(e => e.eventId !== ev.eventId), ev].slice(-400)
       set({ timeline })
 
       // live agent status
@@ -271,34 +290,22 @@ export const useStore = create<State>((set, get) => ({
       if (ev.type === 'TEST_COMPLETED') get().selectMission(s.selectedMissionId!).catch(() => {})
       if (ev.type === 'EXPERIMENT_COMPLETED') get().selectMission(s.selectedMissionId!).catch(() => {})
     }
-    get().refreshSystem()
   },
 
   connectWs: () => {
-    if (get().wsConnected) return
-    let ws: WebSocket | null = null
-    let retries = 0
-    const connect = () => {
-      ws = new WebSocket(wsUrl())
-      ws.onopen = () => {
-        set({ wsConnected: true })
-        retries = 0
-      }
-      ws.onmessage = (msg) => {
-        try {
-          const ev = JSON.parse(msg.data) as TimelineEvent
-          get().handleEvent(ev)
-        } catch {
-          /* ignore malformed frames */
-        }
-      }
-      ws.onclose = () => {
-        set({ wsConnected: false })
-        retries += 1
-        if (retries <= 8) setTimeout(connect, Math.min(1000 * retries, 8000))
-      }
-      ws.onerror = () => ws?.close()
+    if (!booted || reconnect || (socket && socket.readyState < WebSocket.CLOSING)) return
+    const ws = new WebSocket(wsUrl())
+    socket = ws
+    ws.onopen = () => set({ wsConnected: true })
+    ws.onmessage = (msg) => {
+      try { const ev = JSON.parse(msg.data); if (ev.eventId && ev.type) get().handleEvent(ev) } catch { /* malformed frame */ }
     }
-    connect()
+    ws.onclose = () => {
+      if (socket !== ws) return
+      socket = null
+      set({ wsConnected: false })
+      if (booted) reconnect = setTimeout(() => { reconnect = undefined; get().connectWs() }, 8000)
+    }
+    ws.onerror = () => ws.close()
   },
 }))

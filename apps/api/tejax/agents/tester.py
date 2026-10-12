@@ -30,7 +30,10 @@ class Tester(BaseAgent):
         await ctx.pacing()
 
         runner = build_runner()
-        run = await runner.run(code)
+        files = None
+        if ctx.mission.dataset_filename and ctx.state.get("dataset_content"):
+            files = {ctx.mission.dataset_filename: ctx.state["dataset_content"]}
+        run = await runner.run(code, files=files)
 
         checks: list[dict[str, Any]] = []
         exit_ok = run.exit_code == 0

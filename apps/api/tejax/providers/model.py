@@ -64,7 +64,8 @@ class ModelProvider(ABC):
         return None
 
     async def health(self) -> dict[str, Any]:
-        return {"provider": self.name, "ok": True}
+        return {"provider": self.name, "ok": True if self.name == "demo" else None,
+                "note": "Use Test connection to verify a configured model."}
 
 
 # --- Shared HTTP helper ---------------------------------------------------
@@ -346,13 +347,7 @@ class FallbackProvider(ModelProvider):
                 logger.warning("FallbackProvider: %s failed: %s", p.name, exc)
                 continue
 
-        # All failed — use demo
-        logger.warning("FallbackProvider: all providers failed, using demo. Errors: %s", errors)
-        demo = DemoProvider()
-        self._active = demo
-        self.name = "auto(local)"
-        self.model = "tejax-core-engine"
-        return await demo.generate(system, prompt, **kwargs)
+        raise RuntimeError("All configured model providers failed. Check configuration or explicitly select demo mode.")
 
     async def embed(self, text: str) -> list[float] | None:
         for p in self._providers:
@@ -427,7 +422,8 @@ def build_provider(name: str | None = None) -> ModelProvider:
     if name == "demo":
         return DemoProvider()
     if name == "auto":
-        return FallbackProvider()
+        chain = _build_auto_chain()
+        return chain[0] if len(chain) == 1 else FallbackProvider(chain)
 
     return FallbackProvider()
 

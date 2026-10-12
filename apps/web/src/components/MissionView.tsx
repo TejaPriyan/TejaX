@@ -109,7 +109,7 @@ export default function MissionView() {
   }, [mission])
 
   const [activeTab, setActiveTab] = useState<'summary' | 'dataset' | 'real_dataset' | 'simulator' | 'code' | 'experiments' | 'timeline' | 'ledger'>(
-    mission?.datasetFilename ? 'real_dataset' : isDnaMission ? 'dataset' : isPredictMission ? 'simulator' : 'summary'
+    'summary'
   )
   const [copiedCode, setCopiedCode] = useState(false)
   const [copiedFasta, setCopiedFasta] = useState(false)
@@ -337,7 +337,7 @@ if __name__ == "__main__":
               {mission.datasetFilename ? (
                 <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 font-bold flex items-center gap-1.5 shadow-[0_0_10px_rgba(52,211,153,0.2)]">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  REAL EVIDENCE · DATASET VALIDATED
+                  DATASET ATTACHED · VALIDATION REQUIRED
                 </span>
               ) : (
                 <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-400 border border-slate-700/60">
@@ -623,7 +623,7 @@ if __name__ == "__main__":
 
         {/* TAB: PREDICTION SIMULATOR */}
         {activeTab === 'simulator' && (
-          <div className="page-enter">
+          <div className="page-enter"><p className="p-4 text-amber-200">Illustrative simulator — not a prediction or output from this mission.</p>
             <PredictionSimulator />
           </div>
         )}
@@ -641,14 +641,14 @@ if __name__ == "__main__":
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 font-sans">
-                  Mounted directly into the execution sandbox workspace. Agents Coder and Scientist benchmarked models against these empirical records.
+                  Attached input records. Inspect experiment code and output to determine what was actually evaluated.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_10px_rgba(52,211,153,0.2)]">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  REAL EVIDENCE · GROUND TRUTH VERIFIED
+                  ATTACHED DATA · NOT INDEPENDENTLY VERIFIED
                 </span>
               </div>
             </div>
@@ -657,8 +657,8 @@ if __name__ == "__main__":
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 font-mono">
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                 <div className="text-[10px] uppercase text-slate-500">Record Count</div>
-                <div className="text-xl font-bold text-white mt-0.5">{mission.datasetMetadata?.rows || 20}</div>
-                <div className="text-[10px] text-slate-400">Verified Rows</div>
+                <div className="text-xl font-bold text-white mt-0.5">{mission.datasetMetadata?.rows ?? '—'}</div>
+                <div className="text-[10px] text-slate-400">Parsed Rows</div>
               </div>
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                 <div className="text-[10px] uppercase text-slate-500">Feature Count</div>
@@ -672,7 +672,7 @@ if __name__ == "__main__":
               </div>
               <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                 <div className="text-[10px] uppercase text-slate-500">Evidence Class</div>
-                <div className="text-xl font-bold text-purple-400 mt-0.5">REAL</div>
+                <div className="text-xl font-bold text-purple-400 mt-0.5">{mission.report?.evidence_type || 'UNVERIFIED'}</div>
                 <div className="text-[10px] text-slate-400">Empirically Grounded</div>
               </div>
             </div>
@@ -790,37 +790,10 @@ if __name__ == "__main__":
 
             {/* LIVE 3D DNA DOUBLE HELIX CANVASES */}
             <div className="mb-6">
-              <DnaHelixCanvas sequenceCount={100000} />
+              <p className="mb-3 text-amber-200">Illustrative sample records and downloadable template; not generated mission results. Gene annotations are unverified.</p><DnaHelixCanvas sequenceCount={SYNTHETIC_DNA_RECORDS.length} />
             </div>
 
-            {/* Sequence Composition & Nucleotide Metrics */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-                <div className="text-[10px] font-mono uppercase text-slate-500">Total Sequences</div>
-                <div className="text-lg font-bold text-white font-mono mt-0.5">100,000</div>
-                <div className="text-[10px] text-slate-400">15.0 Mbp Synthetic</div>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-                <div className="text-[10px] font-mono uppercase text-slate-500">Mean GC Content</div>
-                <div className="text-lg font-bold text-cyan-400 font-mono mt-0.5">48.3%</div>
-                <div className="text-[10px] text-slate-400">Human canonical baseline</div>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-                <div className="text-[10px] font-mono uppercase text-slate-500">Phred Score</div>
-                <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">Q39.8</div>
-                <div className="text-[10px] text-slate-400">&gt;99.99% accuracy</div>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
-                <div className="text-[10px] font-mono uppercase text-slate-500">Mutation Rate</div>
-                <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">1.2 × 10⁻⁸</div>
-                <div className="text-[10px] text-slate-400">Whole-genome germline</div>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center col-span-2 md:col-span-1">
-                <div className="text-[10px] font-mono uppercase text-slate-500">Reference Genome</div>
-                <div className="text-lg font-bold text-purple-400 font-mono mt-0.5">GRCh38 / hg38</div>
-                <div className="text-[10px] text-slate-400">Full locus mapping</div>
-              </div>
-            </div>
+            <p className="mb-5 text-sm text-slate-300">This gallery contains {SYNTHETIC_DNA_RECORDS.length} static examples. Sequencing quality, mutation rates and genomic alignment have not been measured.</p>
 
             {/* Nucleotide Color Legend */}
             <div className="flex items-center gap-4 mb-3 text-xs font-mono text-slate-400">
@@ -981,7 +954,7 @@ if __name__ == "__main__":
                       <span className="text-emerald-300 font-bold">REAL DATASET INGESTED:</span>
                       <span className="text-white font-semibold">{mission.datasetFilename}</span>
                       <span className="text-slate-400">
-                        ({mission.datasetMetadata?.rows || 20} records · {mission.datasetMetadata?.columns?.length || 0} features)
+                        ({mission.datasetMetadata?.rows ?? '—'} records · {mission.datasetMetadata?.columns?.length || 0} features)
                       </span>
                     </div>
                     <button

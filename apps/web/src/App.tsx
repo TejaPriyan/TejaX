@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from './lib/store'
 import { sound } from './lib/sound'
-import Site from './components/site/Site'
+import { lazy, Suspense } from 'react'
+const Site = lazy(() => import('./components/site/Site'))
+import ConnectionBanner from './components/ConnectionBanner'
 import Sidebar from './components/Sidebar'
 import CommandCenter from './components/CommandCenter'
 import MissionView from './components/MissionView'
@@ -11,6 +13,7 @@ import ExperimentsPage from './components/ExperimentsPage'
 import MemoryPage from './components/MemoryPage'
 import AnalyticsPage from './components/AnalyticsPage'
 import SettingsPage from './components/SettingsPage'
+import { HostedCommand, HostedResults, HostedSettings, HostedUnavailable } from './components/HostedPages'
 
 export default function App() {
   const view = useStore((s) => s.view)
@@ -18,9 +21,11 @@ export default function App() {
   const boot = useStore((s) => s.boot)
   const performanceMode = useStore((s) => s.performanceMode)
   const timeline = useStore((s) => s.timeline)
+  const hosted = useStore((s) => s.systemStatus?.hosted)
 
   useEffect(() => {
-    boot()
+    void boot()
+    return () => useStore.getState().stop()
   }, [boot])
 
   // Synthesized audio cues on live events (only when the user has enabled sound).
@@ -33,7 +38,7 @@ export default function App() {
   }, [timeline])
 
   if (view === 'site') {
-    return <Site />
+    return <Suspense fallback={<div className="p-8">Loading TejaX…</div>}><Site /></Suspense>
   }
 
   return (
@@ -46,17 +51,18 @@ export default function App() {
       </div>
 
       <Sidebar />
+      <ConnectionBanner />
 
       <main className={`relative flex-1 min-w-0 h-full ${page === 'lab' ? 'overflow-hidden' : 'overflow-y-auto scroll-thin'}`}>
         <div key={page} className={`page-enter relative z-10 ${page === 'lab' ? 'h-full w-full' : 'min-h-full'}`}>
-          {page === 'command' && <CommandCenter />}
-          {page === 'missions' && <MissionView />}
+          {page === 'command' && (hosted ? <HostedCommand /> : <CommandCenter />)}
+          {page === 'missions' && (hosted ? <HostedResults /> : <MissionView />)}
           {page === 'lab' && <LabPage />}
           {page === 'agents' && <AgentsPage />}
-          {page === 'experiments' && <ExperimentsPage />}
-          {page === 'memory' && <MemoryPage />}
+          {page === 'experiments' && (hosted ? <HostedUnavailable /> : <ExperimentsPage />)}
+          {page === 'memory' && (hosted ? <HostedUnavailable /> : <MemoryPage />)}
           {page === 'analytics' && <AnalyticsPage />}
-          {page === 'settings' && <SettingsPage />}
+          {page === 'settings' && (hosted ? <HostedSettings /> : <SettingsPage />)}
         </div>
         {performanceMode && (
           <div className="fixed bottom-3 right-3 z-50 rounded-md px-2 py-1 text-[10px] font-mono glass text-faint">

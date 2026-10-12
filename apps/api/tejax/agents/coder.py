@@ -203,59 +203,38 @@ def _extract_code(raw: str) -> str | None:
 
 def build_real_dataset_code(filename: str, metadata: dict | None = None, *, variant: int = 0) -> tuple[str, str]:
     """Generates a reproducible experiment script that reads and evaluates on the real dataset."""
-    meta = metadata or {}
-    cols = meta.get("columns", [])
-    code = f'''import csv, json, math, random
-
-# Real Dataset Ingestion & Evaluation Benchmark
-DATASET_FILE = "{filename}"
-random.seed(42 + {variant})
-
-rows = []
-try:
-    with open(DATASET_FILE, "r", encoding="utf-8", errors="replace") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(r)
-except Exception:
-    with open(DATASET_FILE, "r", encoding="utf-8", errors="replace") as f:
-        data = json.load(f)
-        rows = data if isinstance(data, list) else [data]
-
-n_total = len(rows)
-if n_total == 0:
-    print('__TEJAX_METRIC__: ' + json.dumps({{"score": 0.0, "error": "empty_dataset"}}))
-    exit(0)
-
-# Split 75% train / 25% test
-random.shuffle(rows)
-split_idx = max(1, int(n_total * 0.75))
-train_set = rows[:split_idx]
-test_set = rows[split_idx:] if len(rows) > 1 else rows
-
-columns = list(rows[0].keys())
-target_col = columns[-1] if columns else "target"
-
-# Evaluate heuristic & predictive classification on real data
-accuracy = round(min(0.985, 0.74 + ({variant} * 0.075) + random.uniform(0.01, 0.04)), 4)
-loss = round(max(0.04, 0.42 - ({variant} * 0.08) - random.uniform(0.01, 0.03)), 4)
-
-metrics = {{
-    "score": accuracy,
-    "accuracy": accuracy,
-    "loss": loss,
-    "dataset_rows": n_total,
-    "evaluated_samples": len(test_set),
-    "features_count": len(columns),
-    "target_column": target_col,
-}}
-
-print(f"Validated on real dataset: {{DATASET_FILE}} ({{n_total}} rows, {{len(columns)}} features)")
-print(f"Iteration #{variant + 1} Test Accuracy: {{accuracy * 100:.2f}}%")
+    target = (metadata or {}).get("target_column")
+    code = """import csv, json, random
+from collections import Counter
+DATASET_FILE = %r
+TARGET = %r
+with open(DATASET_FILE, encoding="utf-8") as source:
+    if DATASET_FILE.lower().endswith(".json"):
+        parsed = json.load(source)
+        rows = parsed if isinstance(parsed, list) else [parsed]
+    else:
+        rows = list(csv.DictReader(source))
+if len(rows) < 4 or not all(isinstance(row, dict) for row in rows):
+    raise ValueError("A baseline needs at least four tabular records")
+target = TARGET or list(rows[0])[-1]
+if any(target not in row or row[target] in (None, '') for row in rows):
+    raise ValueError("Target column is missing values")
+random.Random(42).shuffle(rows)
+split = min(len(rows)-1, max(1, int(len(rows)*0.75)))
+train, test = rows[:split], rows[split:]
+labels = [str(row[target]) for row in train]
+prediction = Counter(labels).most_common(1)[0][0]
+accuracy = sum(str(row[target]) == prediction for row in test) / len(test)
+metrics = {"score": accuracy, "accuracy": accuracy, "baseline": "majority_label",
+           "dataset_rows": len(rows), "train_samples": len(train),
+           "evaluated_samples": len(test), "target_column": target,
+           "target_inferred": TARGET is None, "seed": 42}
+print("Measured majority-label baseline; no trained model. Target: " + target)
+print("If inferred, confirm the last column is the intended categorical target.")
+print("This baseline is not a regression metric or independent validation.")
 print('__TEJAX_METRIC__: ' + json.dumps(metrics))
-'''
-    hypothesis = f"Evaluate machine learning pipeline on real dataset '{filename}' (Iteration #{variant + 1})"
-    return code, hypothesis
+""" % (filename, target)
+    return code, "Measure a majority-label baseline on a fixed held-out split; confirm target selection."
 
 
 class Coder(BaseAgent):

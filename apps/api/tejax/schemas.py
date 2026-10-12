@@ -25,7 +25,7 @@ class MissionCreate(ApiModel):
     description: str = Field(default="", max_length=6000)
     max_iterations: int = Field(default=5, ge=1, le=20)
     dataset_filename: str | None = None
-    dataset_content: str | None = None
+    dataset_content: str | None = Field(default=None, max_length=2_000_000)
     dataset_metadata: dict[str, Any] | None = None
 
 

@@ -16,7 +16,7 @@ const SHOWCASE_PRESETS = [
     icon: '🧬',
     category: 'GENOMICS & BIOINFORMATICS',
     title: 'Generate a large dataset on DNA',
-    desc: 'Synthesize 100,000 canonical human nucleotide sequences (GRCh38 aligned) with GC distribution analysis, mutation rate modeling, and exportable FASTA/CSV records.',
+    desc: 'Explore synthetic sequence generation. Demo outputs are simulations, not genome-aligned or clinically validated records.',
     color: '#38bdf8',
     tag: 'FEATURED SHOWCASE',
   },
@@ -339,7 +339,7 @@ export default function CommandCenter() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-mono text-cyan-400 font-bold">📁 ATTACH DATASET (CSV / JSON)</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                PHASE 2: REAL DATA VALIDATION
+                ATTACH A DATASET
               </span>
             </div>
             {dataset && (
@@ -364,7 +364,7 @@ export default function CommandCenter() {
                   </span>
                 </div>
                 <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700/60">
-                  REAL EVIDENCE BADGE ACTIVE
+                  DATASET ATTACHED — REVIEW RESULTS
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -461,7 +461,7 @@ export default function CommandCenter() {
 
       {/* Research & Simulation Showcase Benchmarks */}
       <div className="mb-6">
-        <SectionTitle hint="1-click verified multi-agent benchmark workflows" icon="⚡">
+        <SectionTitle hint="Example prompts; results depend on data and model configuration" icon="⚡">
           Showcase Benchmarks & Simulations
         </SectionTitle>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger">

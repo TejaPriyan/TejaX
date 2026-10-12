@@ -47,9 +47,7 @@ class Scientist(BaseAgent):
         # Determine evidence type based on real dataset vs provider mode
         is_demo = ctx.provider.name == "demo" or "demo" in getattr(ctx.provider, "name", "")
         has_dataset = bool(getattr(ctx.mission, "dataset_filename", None))
-        if has_dataset:
-            evidence = EvidenceType.REAL
-        elif is_demo:
+        if is_demo:
             evidence = EvidenceType.DEMO
         else:
             evidence = EvidenceType.SYNTHETIC

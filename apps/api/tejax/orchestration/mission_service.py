@@ -81,6 +81,7 @@ class MissionService:
         if mission is None:
             raise KeyError(mission_id)
         if mission_id in _running:
+            _controls[mission_id]["pause"].clear()
             return mission
 
         _controls[mission_id] = {
